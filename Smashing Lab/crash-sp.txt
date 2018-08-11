@@ -1,0 +1,1 @@
+port=abcdabcd dir=abcdabcd logfile=abcdabcd data_dir=abcdabcd user=abcdabcd cgipat=abcdabcd throttles=abcdabcd host=abcdabcd charset=abcdabcd p3p=abcdabcd 

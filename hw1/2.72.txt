@@ -1,0 +1,1 @@
+void copy_int(int val, void *buff, int maxbytes){int size = (int) sizeof(val);if (maxbytes-size)>= 0 )		memcpy(buf, (void*) &val, sizeof(val));}Because sizeof(val) returns an unsigned value, the result of maxbytes - sizeof(val) is also unsigned. This result is non-negative and therefore the conditional test will always be true.  

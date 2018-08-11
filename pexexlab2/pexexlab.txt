@@ -1,0 +1,45 @@
+Elizabeth Han
+004815046
+
+ssh elizabeh@lnxsrv07.seas.ucla.edu
+
+When starting off this lab, I first began by running this line directly on linux:
+
+  emacs -Q -batch -eval '(print (* 1250284240 -1844255039))'
+
+which only gave me 2305843008625102544.  I then used ~eggert/bin64/bin/emacs-25.2, which brought me to what appeared to be the GNU Emacs starting screen, and realized that this was was not what I was looking for when I tried entering ~eggert/src/emacs-25.2/, which got me absolutely nothing because the buffer was read-only.  
+
+I reopened my terminal, then entered ~eggert/src/emacs-25.2/, which got me a message stating that it was a directory, so I entered cd ~eggert/src/emacs-25.2/, and tried looking for the source code file, which was in the src subdirectory.  I then spent approximately an hour trying to figure out how I could get this file off the server and onto my computer.
+
+I reopened my terminal again, entered gdb ~eggert/bin64/bin/emacs-25.2, which opened gbd, set a breakpoint at Ftimes with break Ftimes, and used r -Q -batch -eval '(print (* 1250284240 -1844255039))' to run the program.  Then I used set logging on trace.tr, which gave me file named trace.tr in my home directory, and spent a while trying to get this file onto my computer with
+
+scp elizabeh@lnxsrv07.seas.ucla.edu:/u/cs/ugrad/elizabeh/trace.tr 
+
+which got me an error message, since I didn’t specify where it should go on my computer
+
+scp elizabeh@lnxsrv07.seas.ucla.edu:/u/cs/ugrad/elizabeh/trace.tr/Desktop
+
+which got me an error message that stated that I didn’t have permission to access Desktop
+
+scp elizabeh@lnxsrv07.seas.ucla.edu:/u/cs/ugrad/elizabeh/trace.tr/Users/elizabethhan/Downloads
+
+which got me an error message that stated that /Users/elizabethhan/Downloads didn’t exist
+
+scp elizabeh@lnxsrv07.seas.ucla.edu:/u/cs/ugrad/elizabeh/trace.tr/Users/elizabethhan/Desktop
+
+which got me an error message that stated that /Users/elizabethhan/Desktop didn’t exist
+
+scp elizabeh@lnxsrv07.seas.ucla.edu:u/cs/ugrad/elizabeh/hw1.tar.gz /Users/elizabethhan/Desktop/Hope 
+
+which I tried because at this point, I was wondering if it was just the trace.tr file that wasn’t working, but got me an error message that stated that /Users/elizabethhan/Desktop/Hope didn’t exist.
+
+and then various combinations thereof, with random slashes and spaces, which also got me error messages stating that whatever I was trying to access didn’t exist. I went to tutoring and ended doing cd Downloads to change directories to the Downloads section of my computer, and using scp elizabeh@lnxsrv07.seas.ucla.edu:~/trace.tr . , with ~ representing home on my linux server and . representing Downloads on my local computer.
+
+I opened my newly gotten trace.tr file only to realize that because I hadn’t actually stepped through any of the functions, I got a series of text that consisted of statements that 
+told me I was missing debug information.
+
+I restarted the process again, using:
+
+gdb ~eggert/bin64/bin/emacs-25.2 to open gdb, break Ftimes to set the breakpoint, r -Q -batch -eval '(print (* 1250284240 -1844255039))' to run the function, set logging on trace.tr to run the function, set disassemble-next-line on to presumably disassemble the next line, and then I stepped through all of the function with si, using info registers or info registers [register of choice] to look through the registers.
+
+scp elizabeh@lnxsrv07.seas.ucla.edu:~eggert/src/emacs-25.2/src/data.c . ,

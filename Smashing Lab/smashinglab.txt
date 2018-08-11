@@ -1,0 +1,211 @@
+Answers to questions are on the bottom
+
+
+I downloaded the sthttpd 2.27.0 file from the smashing lab site, added in the patch, and after a series of shenanigans (for example, realizing that I accidentally removed a semicolon), copied the directory into my linux server. (scp -r ~/Downloads/sthttpd-2.27.1 elizabeh@lnxsrv07.seas.ucla.edu:~ )
+ 
+Then I tried various iterations of ‘make clean’ under the deeply flawed assumption that repeating a step often enough will make it work, before realizing that I skipped a step.  I then configured my file using: ./configure LDFLAGS="-Xlinker --rpath=/usr/local/cs/gcc-$(gcc -dumpversion)/lib"
+ 
+I made the strong stack protection executable:
+ 
+make clean
+make CFLAGS='-g3 -O2 -fno-inline -fstack-protector-strong'
+ mv src/thttpd src/thttpd-sp 
+ 
+Attempted to make the address sanitation and neither executables, using:
+ 
+make CFLAGS=‘-g3 -O2 -fno-inline -fsanitize=address’
+mv src/thttpd src/thttpd-as
+ 
+and:
+ 
+make CFLAGS=‘-g3 -O2 -fno-inline -fno-stack-protector -zexecstack’
+mv src/thttpd src/thttpd-no
+ 
+but got: 
+make: *** empty variable name.  Stop.
+ 
+Managed to fix this by using:
+make CFLAGS='-g3 -O2 -fno-inline -fsanitize=address'
+make CFLAGS='-g3 -O2 -fno-inline -fno-stack-protector -zexecstack’
+ 
+but ran into a host of other problems.  The address sanitation would give me a cannot find /usr/lib/libasan.so.0.0.0, so I tried reconfiguring with  ./configure LDFLAGS="-Wl,--rpath=/usr/local/cs/gcc-$(gcc -dumpversion)/lib64", which got me “cannot find -lasan”.
+ 
+When I tried make CFLAGS='-g3 -O2 -fno-inline -fstack-protector -zexecstack’, I got >
+and that was all.
+ 
+Eventually realized that my path wasn’t right, and used: export PATH=/usr/local/cs/bin:$PATH to fix it.  Then I used 
+ 
+make clean
+make CFLAGS='-g3 -O2 -fno-inline -fsanitize=address'
+ mv src/thttpd src/thttpd-as
+ 
+make clean
+make CFLAGS='-g3 -O2 -fno-inline -fstack-protector -zexecstack’
+ mv src/thttpd src/thttpd-no
+ 
+I calculated my port numbers for sp, as, and no, using (12330 + 3 * (X % 293) + Y), X representing my UID and ‘Y’ representing the specific daemon I wanted to use.  These port numbers were 12862, 12863, and 12864 respectively.
+I then made a foo.txt file, which consisted of only my name, placed it in src, then tried calling.
+ src/thttpd-sp -p 12862 -D
+curl http://localhost:12862/foo.txt
+ 
+which didn’t work.  I got an error 404, which stated that it couldn’t find my file.  I replaced “curl http://localhost:12862/foo.txt” with “curl http://localhost:/src/12862/foo.txt” which got me an “Error (7): couldn’t connect to host”.  I then tried “src/thttpd-as -p 12863 -D” and “src/thttpd-no -p 12864 -D” with “http://localhost:/src/12863/foo.txt” and  “http://localhost:/src/12862/foo.txt” with similar results, before I tried to do this in two terminals.  When that didn’t work, I used the one terminal method.
+ 
+I created a different test file using
+“$echo 'this is a test file, high five' > testfile.txt” and “ $ cat testfile.txt”, then started the server with
+“src/thttpd-sp -p 50000”, then used “curl http://localhost:50000/testfile.txt”, which outputted what was in my testfile (‘this is a test file, high five’).
+I then checked 
+src/thttpd-sp -p 12862
+curl http://localhost:12862/testfile.txt (output was ‘this is a test file, high five’ )
+ 
+src/thttpd-as -p 12863
+curl http://localhost:12863/testfile.txt (this one resulted in libasan.so.3: cannot open shared object file: No such file or directory, but I ignored this for now under the assumption I could run the other two first)
+ 
+src/thttpd-no -p 12864
+curl http://localhost:12863/testfile.txt (output was ‘this is a test file, high five’ )
+ 
+then manually ended each process by using ‘ps -u elizabeh’ to find the PID, and then using kill -s 15 PID.
+I made a couple files to crash the servers - one for thttpd-sp (crash-sp.txt) that consisted of and another for thttpd-as and thttpd-no (crash-asno.txt).
+ 
+I ran these in gbd with the port numbers I calculated.
+ 
+gdb src/thttpd-sp  (thttpd-as for AS, thttpd-no for NO)
+run -p 12862 -D -C crash-sp.txt (12863 for AS, 12864 for NO, crash-asno.txt for both)
+bt  //this is to get the backtrace
+b read_config //this is to set the breakpoint
+set disassemble-next-line on ///this lets us actually step through the program
+run -p 12862 -D -C crash-sp.txt //rerun the program to start stepping through program from the beginning
+
+then I repeatedly used ni to look for the point the program crashed.  
+
+//FOR SP
+
+When checking the backtrace:
+
+#0  0x00007ffff6db3118 in ?? () from /lib64/libgcc_s.so.1
+#1  0x00007ffff6db4019 in _Unwind_Backtrace () from /lib64/libgcc_s.so.1
+#2  0x00007ffff76e8636 in backtrace () from /lib64/libc.so.6
+#3  0x00007ffff7651f24 in __libc_message () from /lib64/libc.so.6
+#4  0x00007ffff76ec047 in __fortify_fail () from /lib64/libc.so.6
+#5  0x00007ffff76ec010 in __stack_chk_fail () from /lib64/libc.so.6
+#6  0x0000000000405056 in read_config (filename=<optimized out>) at thttpd.c:1190 // I set the breakpoint at read_config since this is right before the error shows up
+#7  0x0000000000006463 in ?? ()
+#8  0x0000000000000018 in ?? ()
+#9  0x00007fffffffe49d in ?? ()
+#10 0x00007fffffffd010 in ?? ()
+#11 0x00007fffffffcf90 in ?? ()
+#12 0x00007fffffffe1b0 in ?? ()
+#13 0x0000000000000000 in ?? ()
+
+//FOR AS
+
+I notice that running through the function actually gets me “libasan.so.3: wrong ELF class: ELFCLASS32” instead of a segmentation fault, so I reconfigure thttpd-as using ./configure LDFLAGS="-Wl,--rpath=/usr/local/cs/gcc-$(gcc -dumpversion)/lib64”, which does give me the segmentation fault.
+
+Backtrace:
+
+#0  uw_frame_state_for (context=context@entry=0x7fffffffb830, fs=fs@entry=0x7fffffffb920) at ../../../gcc-6.3.0/libgcc/unwind-dw2.c:1249
+#1  0x00007ffff59985f8 in _Unwind_Backtrace (trace=trace@entry=0x7ffff6f25440 <__sanitizer::Unwind_Trace(_Unwind_Context*, void*)>, 
+    trace_argument=trace_argument@entry=0x7fffffffbae0) at ../../../gcc-6.3.0/libgcc/unwind.inc:290
+#2  0x00007ffff6f254f3 in __sanitizer::BufferedStackTrace::SlowUnwindStack (this=0x7fffffffbc00, pc=140737335864649, max_depth=<optimized out>)
+    at ../../../../gcc-6.3.0/libsanitizer/sanitizer_common/sanitizer_unwind_linux_libcdep.cc:113
+#3  0x00007ffff6f0c191 in __asan::GetStackTraceWithPcBpAndContext (fast=false, context=0x0, bp=140737488342240, pc=140737335864649, max_depth=256, stack=0x7fffffffbc00)
+    at ../../../../gcc-6.3.0/libsanitizer/asan/asan_stack.h:49
+#4  __asan::ReportGenericError (pc=<optimized out>, bp=bp@entry=140737488342240, sp=sp@entry=140737488340112, addr=addr@entry=140737488342404, is_write=is_write@entry=false, 
+    access_size=access_size@entry=222, exp=<optimized out>, fatal=<optimized out>) at ../../../../gcc-6.3.0/libsanitizer/asan/asan_report.cc:1092
+#5  0x00007ffff6e92d64 in __interceptor_strchr (str=<optimized out>, c=<optimized out>) at ../../../../gcc-6.3.0/libsanitizer/asan/asan_interceptors.cc:468
+#6  0x0000000000407421 in read_config (filename=<optimized out>) at thttpd.c:1018
+#7  0x0000002061616161 in ?? ()
+#8  0x00007fffffffce40 in ?? ()
+#9  0x00007fffffffe0a0 in ?? ()
+#10 0x00007fffffffe49b in ?? ()
+#11 0x00007fffffffcfc0 in ?? ()
+#12 0x0000000000000006 in ?? ()
+#13 0x0000000000405588 in main (argc=1633771873, argv=<optimized out>) at thttpd.c:380
+
+
+//FOR NO
+
+Backtrace:
+
+ 0x0000000000404d9f in read_config (filename=<optimized out>)
+    at thttpd.c:1190
+#1  0x6161616161616161 in ?? ()
+#2  0x6161616161616161 in ?? ()
+#3  0x6161616161616161 in ?? ()
+#4  0x6161616161616161 in ?? ()
+#5  0x6161616161616161 in ?? ()
+#6  0x6161616161616161 in ?? ()
+#7  0x6161616161616161 in ?? ()
+#8  0x6161616161616161 in ?? ()
+#9  0x0000000061616161 in ?? ()
+#10 0x0000000000000000 in ?? ()
+
+gdb src/thttpd-as
+run -p 12863 -D -C crash-asno.txt
+bt  //this is to get the backtrace
+b re_config //this is to set the breakpoint
+(gdb) set disassemble-next-line on
+
+gdb src/thttpd-no
+run -p 12864 -D -C crash-asno.txt
+
+(gdb) b
+
+(gdb) bt
+
+(gdb) b thttpd.c:xxxx
+
+(gdb) set disassemble-next-line on
+
+(gdb) run -p (portnumber) -D -C
+
+crash-as.txt
+
+run -p 12863 -D -C crash-asno.txt
+
+
+Generated assembly code versions of thttpd.c for SP, AS, and NO using these commands:
+
+$ gcc -S -O2 -fno-inline -fstack-protector-strong -I .. -I . thttpd.c -o thttpd-sp.s
+$ gcc -S -O2 -fno-inline -fsanitize=address -I .. -I . thttpd.c -o thttpd-as.s
+$ gcc -S -O2 -fno-inline -fno-stack-protector -zexecstack -I .. -I . thttpd.c -o thttpd-no.s
+
+
+Then transferred off linux using this:
+
+scp elizabeh@lnxsrv07.seas.ucla.edu:~/sthttpd-2.27.1/src/thttpd-as.s  ~
+scp elizabeh@lnxsrv07.seas.ucla.edu:~/sthttpd-2.27.1/src/thttpd-no.s  ~
+scp elizabeh@lnxsrv07.seas.ucla.edu:~/sthttpd-2.27.1/src/thttpd-sp.s  ~
+ 
+
+
+ 
+1. The crash-sp.txt that made SP crash consisted of:
+
+port=abcdabcd dir=abcdabcd logfile=abcdabcd data_dir=abcdabcd user=abcdabcd cgipat=abcdabcd throttles=abcdabcd host=abcdabcd charset=abcdabcd p3p=abcdabcd 
+
+This goes over the amount of characters allowed by the buffer.
+
+2. The machine instruction that caused the crash is 0x0000000000404f28 <read_config+1224>:	64 48 33 04 25 28 00 00 00	xor    %fs:0x28,%rax 
+
+3.This machine instruction compares the stack protection’s current ’canary’ value with what it was originally.  If there is a change (which the line “0x0000000000404f31 <read_config+1233>:	0f 85 1a 01 00 00	jne    0x405051 <read_config+1521>” detects) then the buffer has overflowed. 
+
+4. The crash-asno.txt that made AS crash consisted of: dir=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 
+
+which goes further over the amount of characters allowed by the buffer.
+
+5. The machine instruction that caused the crash is 0x000000000040741c <read_config+188>:	e8 4f c0 ff ff	callq  0x403470 <strchr@plt>
+
+6. That machine instruction calls a function “strchr@plt”, which brings in the address sanitization to check shadow memory and notices a “stack-buffer-overflow”
+
+7. To make NO crash, I used the same crash-asno.txt file as before.
+
+8. The machine instruction that caused the crash is 0x0000000000404d9f <read_config+1215>:	c3	retq  
+
+9. It crashes at this line because NO doesn’t check for any buffer overflow in the program, so it only realizes something is wrong at the very end (at return).
+
+10. SP and NO have roughly the same amount of code for handle_read (200 lines), while AS has almost triple that amount. NO has the least amount of code, since it doesn’t check for overrun, it simply lets it happen.  SP checks for buffer-overrun by using canaries (which are randomly chosen integers) that surround the buffer - if the value of these canaries change, then the buffer has overrun - but since it only checks the canaries once here, it’s not that much additional code.  AS checks for overflow every time memory is accessed using shadow memory, which records whether something is safe to access or not. Since it’s constantly checking, this results in much more code than SP and NO.
+
+11. I ended up running out of time to build the exploit, but if I did, I would have to write something into the buffer that is over 100 characters long, enough so that the base pointer and return address is overwritten and allow me customize my own return address - which would point to my exploit.
+
+
+

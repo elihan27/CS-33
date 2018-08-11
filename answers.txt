@@ -1,0 +1,10 @@
+1. Emacs converts every type into an ELISOBJECT - 64 bits, but with only 62 bits of space.  Emacs tries to make for the lacking two bits by doing an arithmetic right shift by two bits whenever it takes in an integer value (see sar    $0x2,%rdi	rdi = 4a85d2d0), and then left shifting with (lea    0x2(,%rbp,4),%rax	rax =7fffffff73ab3b42).  But the constant shifting results in the loss of information, and the latter instruction causes an overflow, which is why the result isn’t correct.
+
+
+2. most-negative-fixnum is defined as * The smallest value that is representable in a Lisp integer.  */, which lisp.h defines as (-1 - MOST_POSITIVE_FIXNUM).  The MOST_POSITIVE_FIXNUM is defined as (EMACS_INT_MAX >> INTTYPEBITS).  INTTYPEBITS is set to two, because of the two bit tag, resulting in (2^63 - 1) >> 2, which is 2305843009213693951, and -1 - 2305843009213693951 is -2305843009213693952
+
+3. most-positive-fixnum is 0x7FFFFFFFFFFFFFFF, and when multiplied by itself gives 1100000000000000000000000000000000000000000000000000000000000001, which overflows.  When Emacs prints this result, it needs to convert it into an ELISOBJECT, which results in the right and left shifting mentioned before, resulting in 00000000000000000000000000000000000000000000000000000000000001, or just 1.
+ 
+4. the -fwrapv option would mean that there would be runtime/compile time errors, since fwrapv would just allow for overflow and cause the integer to wrap around.  However, in cases where there is overflow, the correct mathematical result would not be produced because overflow would cause the result to wrap.
+
+

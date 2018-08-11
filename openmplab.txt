@@ -1,0 +1,128 @@
+
+I downloaded the OpenMP lab file, unzipped in linux server 07, then went into its directory and ran the basic code using “ $make seq “.  I then ran the executable using “$./seq “, which got me:
+
+FUNC TIME : 0.735302
+TOTAL TIME : 2.829899
+
+
+which is presumably the time the function took to run and the total time the program took to run. After that, I made and ran an executable with gprof enabled using “$make seq GPROF=1 “ and “$./seq “, then “$gprof seq | less “ to get me the performance time of my functions. This was the result:
+
+Each sample counts as 0.01 seconds.
+  %   cumulative   self              self     total           
+ time   seconds   seconds    calls  ms/call  ms/call  name    
+ 75.41      0.61     0.61       15    40.72    41.99  func1
+ 12.36      0.71     0.10  5177344     0.00     0.00  rand2
+  3.71      0.74     0.03        1    30.04   111.16  addSeed
+  2.47      0.76     0.02   491520     0.00     0.00  findIndexBin
+  1.24      0.77     0.01       15     0.67     0.67  func2
+  1.24      0.78     0.01       15     0.67     2.00  func5
+  1.24      0.79     0.01        2     5.01     5.01  init
+  1.24      0.80     0.01        1    10.01    10.01  imdilateDisk
+  1.24      0.81     0.01                             sequence
+  0.00      0.81     0.00   983042     0.00     0.00  round
+  0.00      0.81     0.00       16     0.00     0.00  dilateMatrix
+  0.00      0.81     0.00       15     0.00     0.00  func3
+  0.00      0.81     0.00       15     0.00     0.00  func4
+  0.00      0.81     0.00       15     0.00     0.00  rand1
+  0.00      0.81     0.00        2     0.00     0.00  get_time
+  0.00      0.81     0.00        1     0.00     0.00  elapsed_time
+  0.00      0.81     0.00        1     0.00     0.00  fillMatrix
+  0.00      0.81     0.00        1     0.00     0.00  func0
+  0.00      0.81     0.00        1     0.00     0.00  getNeighbors
+
+
+Based on this, we can see that the function that needs to be parallelized the most, out of the ones that I can actually alter, is function 1.  After this realization, I then began parallelizing the the loops, testing every now and again with 
+
+$ make omp
+$ ./omp
+
+or
+
+$ make omp GPROF=1
+$ ./omp
+$ gprof omp | less
+
+This took fair bit of time, because at first I thought that I could only use “#pragma omp parallel for” as a method for doing so, and only applied this to a couple functions. I eventually realized that the variables on a parallel block would speed things up a bit, so I made a variable on each loop private using #pragma omp parallel for private(i) (i being an example), which altered the function time and total time to this:
+
+FUNC TIME : 0.426559
+TOTAL TIME : 2.284162
+
+After realizing that I could actually make more than one variable private at a time, I went about doing so, and somehow got a substantially higher function time than before.  
+FUNC TIME : 0.908960
+TOTAL TIME : 2.836516
+
+Each sample counts as 0.01 seconds.
+  %   cumulative   self              self     total           
+ time   seconds   seconds    calls  ms/call  ms/call  name    
+ 64.45      0.47     0.47       68     6.92     7.83  filter
+ 21.94      0.63     0.16  4249624     0.00     0.00  rand2
+  8.23      0.69     0.06    26530     0.00     0.00  findIndexBin
+  1.37      0.70     0.01        2     5.01     5.01  init
+  1.37      0.71     0.01        1    10.01   168.09  addSeed
+  1.37      0.72     0.01        1    10.01    10.01  imdilateDisk
+  1.37      0.73     0.01                             sequence
+  0.00      0.73     0.00    86679     0.00     0.00  round
+  0.00      0.73     0.00       16     0.00     0.00  dilateMatrix
+  0.00      0.73     0.00       15     0.00     0.00  func1
+  0.00      0.73     0.00       15     0.00     0.00  func2
+  0.00      0.73     0.00       15     0.00     0.00  func3
+  0.00      0.73     0.00       15     0.00     0.00  func4
+  0.00      0.73     0.00       15     0.00     0.00  func5
+  0.00      0.73     0.00       15     0.00     0.00  rand1
+  0.00      0.73     0.00        2     0.00     0.00  get_time
+  0.00      0.73     0.00        1     0.00     0.00  elapsed_time
+  0.00      0.73     0.00        1     0.00     0.00  fillMatrix
+  0.00      0.73     0.00        1     0.00     0.00  func0
+  0.00      0.73     0.00        1     0.00     0.00  getNeighbors
+
+Which I was considerably confused about, since the number of calls wasn’t changing substantially, and I had actually changed the ms/call rate, it just seemed to be taking more time than usual.
+
+I went through this a couple times before I came to the conclusion that my function time was worsening no matter what I did due to a large amount of people on the server, and decided to state the number of threads I was using (16, in this case) to try and speed it up, which worked out and gave me:
+
+FUNC TIME : 0.064542
+TOTAL TIME : 1.910178
+
+which speeds up my function time by about 11 times.  
+
+I then used “$make check “ to make sure the output was correct, which was the case, as it didn’t give me a blaring error message, then tried using “$make checkmem” to see if the memory was allocated/deallocated correctly.
+
+This did not work.  I got:
+
+mtrace filter mtrace.out || true
+Cannot open mtrace data file at /usr/bin/mtrace line 147.
+
+I then did used 
+
+$make omp MTRACE=1
+$./omp 
+
+which resulted in 
+
+Memory not freed:
+-----------------
+           Address     Size     Caller
+addr2line: 'filter': No such file
+0x0000000000afb070   0x12c0  at 
+0x0000000000afc340     0xc0  at 
+addr2line: 'filter': No such file
+0x0000000000afc410     0x88  at 
+addr2line: 'filter': No such file
+0x0000000000afc4a0    0x240  at 
+0x0000000000afc6f0    0x240  at 
+0x0000000000afc940    0x240  at 
+0x0000000000afcb90    0x240  at 
+0x0000000000afcde0    0x240  at 
+0x0000000000afd030    0x240  at 
+0x0000000000afd280    0x240  at 
+0x0000000000afd4d0    0x240  at 
+0x0000000000afd720    0x240  at 
+0x0000000000afd970    0x240  at 
+0x0000000000afdbc0    0x240  at 
+0x0000000000afde10    0x240  at 
+0x0000000000afe060    0x240  at 
+0x0000000000afe2b0    0x240  at 
+0x0000000000afe500    0x240  at 
+
+i.e a large string of addresses with a blaring messaging saying that MEMORY WAS NOT FREED, which I cheerfully ignored since as I did not myself allocate or deallocate data, I am not responsible for any memory leaks.
+
+

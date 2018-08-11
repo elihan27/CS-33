@@ -1,0 +1,15 @@
+
+
+1: -O2:
+
+This flag, due to its optimization level, causes the compiler to ignore the overflow case and assume that the sum of any two numbers is greater than either of the numbers, so n + 9223372036854775807 < n is always false, so the compiler clears itself by XORing eax with eax to always get 0.
+
+2: -O2 -fwrapv:
+
+This flag makes so that the compiler will always wrap numbers when they overflow.  The code here is longer than -O2, because while the compiler will simply cause any overflow to wrap, it still has to deal with said overflow, so this flag actually makes it so the compiler adds n and 9223372036854775807 together.  The result will wrap into a smaller number, so when it is compared with n, it will return true.  
+
+3. -O2 -fsanitized=undefined:
+
+The assembly code compiled using this flag is longer than that compiled with -O2 or -O2 -fwrapv. Unlike O2 and-O2 -fwrapv, this code acknowledges the status flags - if it notices that the overflow flag is triggered, it will jump and call a function that will print out an error message.  The result it will return is uncertain, since what the compiler does with overflow in this case is undefined.
+
+
